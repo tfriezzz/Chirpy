@@ -20,8 +20,8 @@ func main() {
 	var apiCfg apiConfig
 	mux.Handle("/app/", apiCfg.middlewareMetricsInc(http.StripPrefix("/app/", http.FileServer(http.Dir(".")))))
 	mux.Handle("GET /api/healthz", http.StripPrefix("/api/", http.HandlerFunc(handlerReadiness)))
-	mux.Handle("GET /api/metrics", http.StripPrefix("/api/", http.HandlerFunc(apiCfg.handlerMetrics)))
-	mux.Handle("POST /api/reset", http.StripPrefix("/api/", http.HandlerFunc(apiCfg.handlerReset)))
+	mux.Handle("GET /admin/metrics", http.StripPrefix("/admin/", http.HandlerFunc(apiCfg.handlerMetrics)))
+	mux.Handle("POST /admin/reset", http.StripPrefix("/admin/", http.HandlerFunc(apiCfg.handlerReset)))
 
 	fmt.Printf("server listening on port %s\n", port)
 	if err := srv.ListenAndServe(); err != nil {
@@ -30,7 +30,7 @@ func main() {
 }
 
 func handlerReadiness(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.Header().Set("Content-Type", "text/html")
 	w.WriteHeader(200)
 	w.Write([]byte("OK"))
 }
@@ -38,7 +38,12 @@ func handlerReadiness(w http.ResponseWriter, r *http.Request) {
 func (cfg *apiConfig) handlerMetrics(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	hits := cfg.fileserverHits.Load()
-	strHits := fmt.Sprintf("Hits: %v", hits)
+	strHits := fmt.Sprintf(`<html>
+  <body>
+    <h1>Welcome, Chirpy Admin</h1>
+    <p>Chirpy has been visited %d times!</p>
+  </body>
+</html>`, hits)
 	w.WriteHeader(200)
 	w.Write([]byte(strHits))
 }
