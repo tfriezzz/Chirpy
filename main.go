@@ -24,8 +24,8 @@ type apiConfig struct {
 type User struct {
 	ID        uuid.UUID `json:"id"`
 	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json: "updated_at"`
-	Email     string    `json: email`
+	UpdatedAt time.Time `json:"updated_at"`
+	Email     string    `json:"email"`
 }
 
 func main() {
@@ -89,6 +89,22 @@ func (cfg *apiConfig) handlerValidation(w http.ResponseWriter, r *http.Request) 
 	}
 }
 
+func (cfg *apiConfig) handlerAddUser(w http.ResponseWriter, r *http.Request) {
+	decoder := json.NewDecoder(r.Body)
+	params := User{}
+	if err := decoder.Decode(&params); err != nil {
+		fmt.Print(err)
+	}
+	fmt.Printf("email: %v\n", params.Email)
+	user, err := cfg.DB.CreateUser(r.Context(), params.Email)
+	if err != nil {
+		fmt.Printf("CreateUser call: %v\n", err)
+	}
+	if err := respondWithJSON(w, 201, User(user)); err != nil {
+		fmt.Print(err)
+	}
+}
+
 func respondWithJSON(w http.ResponseWriter, code int, payload interface{}) error {
 	response, err := json.Marshal(payload)
 	if err != nil {
@@ -119,6 +135,9 @@ func (cfg *apiConfig) handlerMetrics(w http.ResponseWriter, r *http.Request) {
 }
 
 func (cfg *apiConfig) handlerReset(w http.ResponseWriter, r *http.Request) {
+	if err := cfg.DB.DeleteAllUsers(r.Context()); err != nil {
+		fmt.Print(err)
+	}
 	cfg.fileserverHits.Store(0)
 }
 
