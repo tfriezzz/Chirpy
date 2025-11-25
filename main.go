@@ -46,7 +46,7 @@ func main() {
 	apiCfg.DB = dbQueries
 	mux.Handle("/app/", apiCfg.middlewareMetricsInc(http.StripPrefix("/app/", http.FileServer(http.Dir(".")))))
 	mux.Handle("GET /api/healthz", http.StripPrefix("/api/", http.HandlerFunc(handlerReadiness)))
-	mux.Handle("POST /api/validate_chirp", http.StripPrefix("/api/", http.HandlerFunc(apiCfg.handlerValidation)))
+	mux.Handle("POST /api/chirps", http.StripPrefix("/api/", http.HandlerFunc(apiCfg.handlerChirps)))
 	mux.Handle("POST /api/users", http.StripPrefix("/api/", http.HandlerFunc(apiCfg.handlerAddUser)))
 	mux.Handle("GET /admin/metrics", http.StripPrefix("/admin/", http.HandlerFunc(apiCfg.handlerMetrics)))
 	mux.Handle("POST /admin/reset", http.StripPrefix("/admin/", http.HandlerFunc(apiCfg.handlerReset)))
@@ -63,7 +63,7 @@ func handlerReadiness(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("OK"))
 }
 
-func (cfg *apiConfig) handlerValidation(w http.ResponseWriter, r *http.Request) {
+func (cfg *apiConfig) handlerChirps(w http.ResponseWriter, r *http.Request) {
 	// fmt.Print("hi from handlerValidation")
 	type parameters struct {
 		Body string `json:"body"`
@@ -95,7 +95,7 @@ func (cfg *apiConfig) handlerAddUser(w http.ResponseWriter, r *http.Request) {
 	if err := decoder.Decode(&params); err != nil {
 		fmt.Print(err)
 	}
-	fmt.Printf("email: %v\n", params.Email)
+	// fmt.Printf("email: %v\n", params.Email)
 	user, err := cfg.DB.CreateUser(r.Context(), params.Email)
 	if err != nil {
 		fmt.Printf("CreateUser call: %v\n", err)
