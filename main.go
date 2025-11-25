@@ -1,17 +1,41 @@
 package main
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
+	"strings"
 	"sync/atomic"
+	"time"
+
+	"github.com/google/uuid"
+	"github.com/joho/godotenv"
+	_ "github.com/lib/pq"
+	"github.com/tfriezzz/Chirpy/internal/database"
 )
 
 type apiConfig struct {
 	fileserverHits atomic.Int32
+	DB             *database.Queries
+}
+
+type User struct {
+	ID        uuid.UUID `json:"id"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json: "updated_at"`
+	Email     string    `json: email`
 }
 
 func main() {
+	godotenv.Load()
+	dbURL := os.Getenv("DB_URL")
+	db, err := sql.Open("postgres", dbURL)
+	if err != nil {
+		fmt.Print(err)
+	}
+	dbQueries := database.New(db)
 	port := "8080"
 	mux := http.NewServeMux()
 	srv := &http.Server{
@@ -19,9 +43,11 @@ func main() {
 		Handler: mux,
 	}
 	var apiCfg apiConfig
+	apiCfg.DB = dbQueries
 	mux.Handle("/app/", apiCfg.middlewareMetricsInc(http.StripPrefix("/app/", http.FileServer(http.Dir(".")))))
 	mux.Handle("GET /api/healthz", http.StripPrefix("/api/", http.HandlerFunc(handlerReadiness)))
 	mux.Handle("POST /api/validate_chirp", http.StripPrefix("/api/", http.HandlerFunc(apiCfg.handlerValidation)))
+	mux.Handle("POST /api/users", http.StripPrefix("/api/", http.HandlerFunc(apiCfg.handlerAddUser)))
 	mux.Handle("GET /admin/metrics", http.StripPrefix("/admin/", http.HandlerFunc(apiCfg.handlerMetrics)))
 	mux.Handle("POST /admin/reset", http.StripPrefix("/admin/", http.HandlerFunc(apiCfg.handlerReset)))
 
@@ -54,7 +80,12 @@ func (cfg *apiConfig) handlerValidation(w http.ResponseWriter, r *http.Request) 
 	if len(params.Body) > 140 {
 		respondWithError(w, 400, "Chirp is too long")
 	} else {
-		respondWithJSON(w, 200, map[string]bool{"valid": true})
+		if cleanedBody, profane := profanityChecker(params.Body); profane {
+			fmt.Printf("ok: %v\n", profane)
+			respondWithJSON(w, 200, map[string]string{"cleaned_body": cleanedBody})
+		} else {
+			respondWithJSON(w, 200, map[string]string{"cleaned_body": params.Body})
+		}
 	}
 }
 
@@ -96,4 +127,25 @@ func (cfg *apiConfig) middlewareMetricsInc(next http.Handler) http.Handler {
 		cfg.fileserverHits.Add(1)
 		next.ServeHTTP(w, r)
 	})
+}
+
+func profanityChecker(str string) (string, bool) {
+	// newStr := str
+	isProfane := false
+
+	profanities := []string{"kerfuffle", "sharbert", "fornax"}
+
+	strSplit := strings.Split(str, " ")
+	strLower := strings.ToLower(str)
+	lowerStrSplit := strings.Split(strLower, " ")
+
+	for i, word := range lowerStrSplit {
+		for _, profanity := range profanities {
+			if word == profanity {
+				strSplit[i] = "****"
+				isProfane = true
+			}
+		}
+	}
+	return strings.Join(strSplit, " "), isProfane
 }
