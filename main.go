@@ -28,6 +28,14 @@ type User struct {
 	Email     string    `json:"email"`
 }
 
+type Chirp struct {
+	ID        uuid.UUID `json:"id"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+	Body      string    `json:"body"`
+	UserID    uuid.UUID `json:"user_id"`
+}
+
 func main() {
 	godotenv.Load()
 	dbURL := os.Getenv("DB_URL")
@@ -65,26 +73,34 @@ func handlerReadiness(w http.ResponseWriter, r *http.Request) {
 
 func (cfg *apiConfig) handlerChirps(w http.ResponseWriter, r *http.Request) {
 	// fmt.Print("hi from handlerValidation")
-	type parameters struct {
-		Body string `json:"body"`
-	}
+	// type parameters struct {
+	// 	Body string `json:"body"`
+	// }
 
 	decoder := json.NewDecoder(r.Body)
-	params := parameters{}
-	err := decoder.Decode(&params)
-	fmt.Printf("params: %v\n", params.Body)
+	chirp := Chirp{}
+	err := decoder.Decode(&chirp)
+	fmt.Printf("params: %v\n", chirp.Body)
 	fmt.Printf("error: %v\n", err)
 	if err != nil {
 		respondWithError(w, 500, "Something went wrong")
 	}
-	if len(params.Body) > 140 {
+	if len(chirp.Body) > 140 {
 		respondWithError(w, 400, "Chirp is too long")
 	} else {
-		if cleanedBody, profane := profanityChecker(params.Body); profane {
+		if cleanedBody, profane := profanityChecker(chirp.Body); profane {
 			fmt.Printf("ok: %v\n", profane)
 			respondWithJSON(w, 200, map[string]string{"cleaned_body": cleanedBody})
 		} else {
-			respondWithJSON(w, 200, map[string]string{"cleaned_body": params.Body})
+			chirpParams := database.CreateChirpParams{
+				chirp.Body, chirp.UserID,
+			}
+			chirp, err := cfg.DB.CreateChirp(r.Context(), chirpParams)
+			if err != nil {
+				fmt.Print(err)
+			}
+
+			respondWithJSON(w, 201, Chirp(chirp))
 		}
 	}
 }
