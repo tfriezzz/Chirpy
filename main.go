@@ -57,6 +57,7 @@ func main() {
 	mux.Handle("GET /api/healthz", http.StripPrefix("/api/", http.HandlerFunc(handlerReadiness)))
 	mux.Handle("POST /api/chirps", http.StripPrefix("/api/", http.HandlerFunc(apiCfg.handlerChirps)))
 	mux.Handle("GET /api/chirps", http.StripPrefix("/api/", http.HandlerFunc(apiCfg.handlerGetAllChirps)))
+	mux.Handle("GET /api/chirps/{chirpID}", http.StripPrefix("/api/", http.HandlerFunc(apiCfg.handlerGetChirp)))
 	mux.Handle("POST /api/users", http.StripPrefix("/api/", http.HandlerFunc(apiCfg.handlerAddUser)))
 	mux.Handle("GET /admin/metrics", http.StripPrefix("/admin/", http.HandlerFunc(apiCfg.handlerMetrics)))
 	mux.Handle("POST /admin/reset", http.StripPrefix("/admin/", http.HandlerFunc(apiCfg.handlerReset)))
@@ -100,6 +101,23 @@ func (cfg *apiConfig) handlerChirps(w http.ResponseWriter, r *http.Request) {
 			respondWithJSON(w, 201, Chirp(chirp))
 		}
 	}
+}
+
+func (cfg *apiConfig) handlerGetChirp(w http.ResponseWriter, r *http.Request) {
+	strID := r.PathValue("chirpID")
+	fmt.Printf("IDtest: %v\n", strID)
+	chirpID, err := uuid.Parse(strID)
+	if err != nil {
+		log.Print(err)
+	}
+
+	chirp, err := cfg.DB.GetChirpsByID(r.Context(), chirpID)
+	if err != nil {
+		log.Print(err)
+		respondWithError(w, 404, "chirp not found")
+	}
+	// fmt.Printf("test: %v\n", chirp)
+	respondWithJSON(w, 200, Chirp(chirp))
 }
 
 func (cfg *apiConfig) handlerGetAllChirps(w http.ResponseWriter, r *http.Request) {
