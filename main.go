@@ -14,6 +14,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
+	"github.com/tfriezzz/Chirpy/internal/auth"
 	"github.com/tfriezzz/Chirpy/internal/database"
 )
 
@@ -23,6 +24,14 @@ type apiConfig struct {
 }
 
 type User struct {
+	ID        uuid.UUID `json:"id"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+	Email     string    `json:"email"`
+	Password  string    `json:"password"`
+}
+
+type userResponse struct {
 	ID        uuid.UUID `json:"id"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
@@ -59,6 +68,7 @@ func main() {
 	mux.Handle("GET /api/chirps", http.StripPrefix("/api/", http.HandlerFunc(apiCfg.handlerGetAllChirps)))
 	mux.Handle("GET /api/chirps/{chirpID}", http.StripPrefix("/api/", http.HandlerFunc(apiCfg.handlerGetChirp)))
 	mux.Handle("POST /api/users", http.StripPrefix("/api/", http.HandlerFunc(apiCfg.handlerAddUser)))
+	mux.Handle("POST /api/login", http.StripPrefix("/api/", http.HandlerFunc(apiCfg.handlerLogin)))
 	mux.Handle("GET /admin/metrics", http.StripPrefix("/admin/", http.HandlerFunc(apiCfg.handlerMetrics)))
 	mux.Handle("POST /admin/reset", http.StripPrefix("/admin/", http.HandlerFunc(apiCfg.handlerReset)))
 
@@ -72,6 +82,46 @@ func handlerReadiness(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html")
 	w.WriteHeader(200)
 	w.Write([]byte("OK"))
+}
+
+func (cfg *apiConfig) handlerLogin(w http.ResponseWriter, r *http.Request) {
+	decoder := json.NewDecoder(r.Body)
+	params := User{}
+	err := decoder.Decode(&params)
+	if err != nil {
+		log.Print(err)
+	}
+
+	user, err := cfg.DB.GetUserByEmail(r.Context(), params.Email)
+	if err != nil {
+		log.Print(err)
+		err := respondWithError(w, 401, "Incorrect email or password")
+		if err != nil {
+			log.Print(err)
+		}
+	}
+
+	if err != nil {
+		log.Print(err)
+	}
+
+	match, err := auth.CheckPasswordHash(params.Password, user.HashedPassword)
+	if err != nil {
+		log.Print(err)
+	}
+	if match {
+		userResponse := dbUserToUserResponse(user)
+		err := respondWithJSON(w, 200, userResponse)
+		if err != nil {
+			log.Print(err)
+		}
+	} else {
+
+		err := respondWithError(w, 401, "Incorrect email or password")
+		if err != nil {
+			log.Print(err)
+		}
+	}
 }
 
 func (cfg *apiConfig) handlerChirps(w http.ResponseWriter, r *http.Request) {
@@ -142,12 +192,21 @@ func (cfg *apiConfig) handlerAddUser(w http.ResponseWriter, r *http.Request) {
 	if err := decoder.Decode(&params); err != nil {
 		fmt.Print(err)
 	}
-	// fmt.Printf("email: %v\n", params.Email)
-	user, err := cfg.DB.CreateUser(r.Context(), params.Email)
+	hashedPassword, err := auth.HashPassword(params.Password)
+	if err != nil {
+		log.Print(err)
+	}
+	userParams := database.CreateUserParams{
+		params.Email, hashedPassword,
+	}
+	user, err := cfg.DB.CreateUser(r.Context(), userParams)
 	if err != nil {
 		fmt.Printf("CreateUser call: %v\n", err)
 	}
-	if err := respondWithJSON(w, 201, User(user)); err != nil {
+
+	userResponse := dbUserToUserResponse(user)
+
+	if err := respondWithJSON(w, 201, userResponse); err != nil {
 		fmt.Print(err)
 	}
 }
@@ -214,4 +273,13 @@ func profanityChecker(str string) (string, bool) {
 		}
 	}
 	return strings.Join(strSplit, " "), isProfane
+}
+
+func dbUserToUserResponse(u database.User) userResponse {
+	return userResponse{
+		ID:        u.ID,
+		CreatedAt: u.CreatedAt,
+		UpdatedAt: u.CreatedAt,
+		Email:     u.Email,
+	}
 }
