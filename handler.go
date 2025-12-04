@@ -6,11 +6,37 @@ import (
 	"log"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/tfriezzz/Chirpy/internal/auth"
 	"github.com/tfriezzz/Chirpy/internal/database"
 )
+
+type User struct {
+	ID               uuid.UUID `json:"id"`
+	CreatedAt        time.Time `json:"created_at"`
+	UpdatedAt        time.Time `json:"updated_at"`
+	Email            string    `json:"email"`
+	Password         string    `json:"password"`
+	ExpiresInSeconds float64   `json:"expires_in_seconds"`
+}
+
+type userResponse struct {
+	ID        uuid.UUID `json:"id"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+	Email     string    `json:"email"`
+	Token     string    `json:"token"`
+}
+
+type Chirp struct {
+	ID        uuid.UUID `json:"id"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+	Body      string    `json:"body"`
+	UserID    uuid.UUID `json:"user_id"`
+}
 
 func handlerReadiness(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html")
@@ -44,7 +70,7 @@ func (cfg *apiConfig) handlerLogin(w http.ResponseWriter, r *http.Request) {
 		log.Print(err)
 	}
 	if match {
-		userResponse := dbUserToUserResponse(user)
+		userResponse := dbUserToUserResponse(user, cfg, params.ExpiresInSeconds)
 		err := respondWithJSON(w, 200, userResponse)
 		if err != nil {
 			log.Print(err)
@@ -62,10 +88,28 @@ func (cfg *apiConfig) handlerChirps(w http.ResponseWriter, r *http.Request) {
 	decoder := json.NewDecoder(r.Body)
 	chirp := Chirp{}
 	err := decoder.Decode(&chirp)
-	fmt.Printf("params: %v\n", chirp.Body)
-	fmt.Printf("error: %v\n", err)
 	if err != nil {
-		respondWithError(w, 500, "Something went wrong")
+		log.Printf("decoder.Decode returned err: %v", err)
+	}
+
+	tokenString, err := auth.GetBearerToken(r.Header)
+	if err != nil {
+		log.Printf("GetBearerToken returned err: %v", err)
+	}
+	userID, err := auth.ValidateJWT(tokenString, cfg.JWTString)
+	if err != nil {
+		err := respondWithError(w, 401, "authentication failed")
+		if err != nil {
+			log.Printf("respondWithError returned error: %v", err)
+		}
+	}
+	// fmt.Printf("params: %v\n", chirp.Body)
+	// fmt.Printf("error: %v\n", err)
+	if err != nil {
+		err := respondWithError(w, 500, "Something went wrong")
+		if err != nil {
+			log.Printf("respondWithError returned error: %v", err)
+		}
 	}
 	if len(chirp.Body) > 140 {
 		respondWithError(w, 400, "Chirp is too long")
@@ -75,7 +119,7 @@ func (cfg *apiConfig) handlerChirps(w http.ResponseWriter, r *http.Request) {
 			respondWithJSON(w, 200, map[string]string{"cleaned_body": cleanedBody})
 		} else {
 			chirpParams := database.CreateChirpParams{
-				chirp.Body, chirp.UserID,
+				chirp.Body, userID,
 			}
 			chirp, err := cfg.DB.CreateChirp(r.Context(), chirpParams)
 			if err != nil {
@@ -131,14 +175,14 @@ func (cfg *apiConfig) handlerAddUser(w http.ResponseWriter, r *http.Request) {
 		log.Print(err)
 	}
 	userParams := database.CreateUserParams{
-		params.Email, hashedPassword,
+		Email: params.Email, HashedPassword: hashedPassword,
 	}
 	user, err := cfg.DB.CreateUser(r.Context(), userParams)
 	if err != nil {
 		fmt.Printf("CreateUser call: %v\n", err)
 	}
 
-	userResponse := dbUserToUserResponse(user)
+	userResponse := dbUserToUserResponse(user, cfg, params.ExpiresInSeconds)
 
 	if err := respondWithJSON(w, 201, userResponse); err != nil {
 		fmt.Print(err)
@@ -153,7 +197,9 @@ func respondWithJSON(w http.ResponseWriter, code int, payload interface{}) error
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.WriteHeader(code)
-	w.Write(response)
+	if _, err := w.Write(response); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -189,7 +235,7 @@ func (cfg *apiConfig) middlewareMetricsInc(next http.Handler) http.Handler {
 }
 
 func profanityChecker(str string) (string, bool) {
-	// newStr := str
+	// newStr := sta
 	isProfane := false
 
 	profanities := []string{"kerfuffle", "sharbert", "fornax"}
@@ -209,11 +255,24 @@ func profanityChecker(str string) (string, bool) {
 	return strings.Join(strSplit, " "), isProfane
 }
 
-func dbUserToUserResponse(u database.User) userResponse {
+func dbUserToUserResponse(u database.User, cfg *apiConfig, seconds float64) userResponse {
+	var expiration time.Duration
+	if seconds != 0 && seconds >= 3600 {
+		expiration = time.Duration(seconds) * time.Second
+	} else {
+		expiration = time.Hour
+	}
+
+	token, err := auth.MakeJWT(u.ID, cfg.JWTString, expiration)
+	if err != nil {
+		log.Printf("MakeJWT returned err: %v", err)
+	}
+
 	return userResponse{
 		ID:        u.ID,
 		CreatedAt: u.CreatedAt,
 		UpdatedAt: u.CreatedAt,
 		Email:     u.Email,
+		Token:     token,
 	}
 }

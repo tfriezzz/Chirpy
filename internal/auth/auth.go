@@ -2,6 +2,9 @@
 package auth
 
 import (
+	"fmt"
+	"net/http"
+	"strings"
 	"time"
 
 	"github.com/alexedwards/argon2id"
@@ -70,4 +73,14 @@ func ValidateJWT(tokenString, tokenSecret string) (uuid.UUID, error) {
 	}
 
 	return id, nil
+}
+
+func GetBearerToken(headers http.Header) (string, error) {
+	header := headers["Authorization"]
+	for _, headerString := range header {
+		splitString := strings.Split(headerString, " ")
+		tokenString := strings.TrimSpace(splitString[1])
+		return tokenString, nil
+	}
+	return "", fmt.Errorf("missing string")
 }

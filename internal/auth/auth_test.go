@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"net/http"
 	"testing"
 	"time"
 
@@ -59,5 +60,31 @@ func TestValidateJWT_WrongSecret(t *testing.T) {
 
 	if gotID == userID {
 		t.Fatal("userID & gotID should not be equal")
+	}
+}
+
+func TestGetBearerToken_HappyPath(t *testing.T) {
+	headers := make(http.Header)
+	headers.Add("Authorization", "Bearer TOKEN_STRING")
+
+	wantString := "TOKEN_STRING"
+
+	gotString, err := GetBearerToken(headers)
+	if err != nil {
+		t.Fatalf("GetBearerToken returned err: %v", err)
+	}
+
+	if gotString != wantString {
+		t.Fatalf("want: %v, got: %v", wantString, gotString)
+	}
+}
+
+func TestGetBearerToken_MissingHeader(t *testing.T) {
+	headers := make(http.Header)
+	headers.Add("gobbeldyguck", "Bearer TOKEN_STRING")
+
+	_, err := GetBearerToken(headers)
+	if err == nil {
+		t.Fatalf("should return error")
 	}
 }
