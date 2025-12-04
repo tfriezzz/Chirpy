@@ -11,6 +11,8 @@
 *.dll
 *.so
 *.dylib
+one
+Chirpy
 
 # Test binary, built with `go test -c`
 *.test
