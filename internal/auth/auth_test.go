@@ -88,3 +88,13 @@ func TestGetBearerToken_MissingHeader(t *testing.T) {
 		t.Fatalf("should return error")
 	}
 }
+
+func TestMakeRefreshToken_HappyPath(t *testing.T) {
+	hexString, err := MakeRefreshToken()
+	if err != nil {
+		t.Fatalf("MakeRefreshToken returned err: %v", err)
+	}
+	if hexString == "" {
+		t.Fatalf("no hexString returned")
+	}
+}
