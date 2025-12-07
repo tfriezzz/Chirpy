@@ -129,42 +129,37 @@ func (cfg *apiConfig) handlerChirps(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		respondWithError(w, 401, "authentication failed")
 		return
+		}
 	}
-
-	// if err != nil {
-	// 	err := respondWithError(w, 500, "Something went wrong")
-	// 	if err != nil {
-	// 		log.Printf("respondWithError returned error: %v", err)
-	// 	}
-	// }
-
+	// fmt.Printf("params: %v\n", chirp.Body)
+	// fmt.Printf("error: %v\n", err)
+	if err != nil {
+		err := respondWithError(w, 500, "Something went wrong")
+		if err != nil {
+			log.Printf("respondWithError returned error: %v", err)
+		}
+	}
 	if len(chirp.Body) > 140 {
 		respondWithError(w, 400, "Chirp is too long")
-		return
-	}
-	if cleanedBody, profane := profanityChecker(chirp.Body); profane {
-		fmt.Printf("ok: %v\n", profane)
-		respondWithJSON(w, 200, map[string]string{"cleaned_body": cleanedBody})
-		return
-	}
+	} else {
+		if cleanedBody, profane := profanityChecker(chirp.Body); profane {
+			fmt.Printf("ok: %v\n", profane)
+			if err := respondWithJSON(w, 200, map[string]string{"cleaned_body": cleanedBody}); err != nil {
+				log.Printf("respondWithJSON returned err: %v", err)
+			}
+		} else {
+			chirpParams := database.CreateChirpParams{
+				chirp.Body, userID,
+			}
+			chirp, err := cfg.DB.CreateChirp(r.Context(), chirpParams)
+			if err != nil {
+				fmt.Print(err)
+			}
 
-	chirpParams := database.CreateChirpParams{
-		chirp.Body, userID,
-	}
-	dbChirp, err := cfg.DB.CreateChirp(r.Context(), chirpParams)
-	if err != nil {
-		fmt.Print(err)
-	}
-
-	if err := respondWithJSON(w, 201, Chirp{
-		ID:        dbChirp.ID,
-		CreatedAt: dbChirp.CreatedAt,
-		UpdatedAt: dbChirp.UpdatedAt,
-		Body:      dbChirp.Body,
-		UserID:    dbChirp.UserID,
-	}); err != nil {
-		respondWithError(w, http.StatusInternalServerError, "couldn't create chirp")
-		return
+			if err := respondWithJSON(w, 201, Chirp(chirp)); err != nil {
+				log.Printf("respondWithJSON returned err: %v", err)
+			}
+		}
 	}
 }
 
