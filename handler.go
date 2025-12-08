@@ -1,6 +1,7 @@
 package main
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -28,6 +29,7 @@ type userResponse struct {
 	Email        string    `json:"email"`
 	Token        string    `json:"token"`
 	RefreshToken string    `json:"refresh_token"`
+	IsChirpyRed  bool      `json:"is_chirpy_red"`
 }
 
 type Chirp struct {
@@ -359,6 +361,46 @@ func (cfg *apiConfig) handlerUpdateCredentials(w http.ResponseWriter, r *http.Re
 	respondWithJSON(w, 200, userResponse)
 }
 
+func (cfg *apiConfig) handlerUpgradeToRed(w http.ResponseWriter, r *http.Request) {
+	type polkaWebhook struct {
+		Event string `json:"event"`
+		Data  struct {
+			UserID string `json:"user_id"`
+		} `json:"data"`
+	}
+	decoder := json.NewDecoder(r.Body)
+	webhook := polkaWebhook{}
+
+	if err := decoder.Decode(&webhook); err != nil {
+		respondWithError(w, 400, "invalid JSON")
+		return
+	}
+
+	userID, err := uuid.Parse(webhook.Data.UserID)
+	if err != nil {
+		log.Printf("uuid.Parse returned err: %v", err)
+	}
+
+	if webhook.Event != "user.upgraded" {
+		respondWithJSON(w, 204, "")
+		return
+	}
+
+	// if dbUser, err := cfg.DB.GetUserByID(r.Context(), userID); err == sql.ErrNoRows {
+	// 	respondWithError(w, 404, "user not found")
+	// 	return
+	// }
+
+	if webhook.Event == "user.upgraded" {
+		_, err := cfg.DB.UpgradeUserToRed(r.Context(), userID)
+		if err == sql.ErrNoRows {
+			respondWithError(w, 404, "can't find user")
+			return
+		}
+		respondWithJSON(w, 204, "")
+	}
+}
+
 func (cfg *apiConfig) middlewareMetricsInc(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		cfg.fileserverHits.Add(1)
@@ -448,5 +490,6 @@ func dbUserToUserResponse(u database.User, cfg *apiConfig, JWTtoken string, refr
 		Email:        u.Email,
 		Token:        JWTtoken,
 		RefreshToken: refreshToken,
+		IsChirpyRed:  u.IsChirpyRed,
 	}
 }
