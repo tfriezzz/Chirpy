@@ -275,6 +275,20 @@ func (cfg *apiConfig) handlerReset(w http.ResponseWriter, r *http.Request) {
 }
 
 func (cfg *apiConfig) handlerRevoke(w http.ResponseWriter, r *http.Request) {
+	refreshToken, err := auth.GetBearerToken(r.Header)
+	if err != nil {
+		respondWithError(w, http.StatusUnauthorized, "authentication failed")
+		log.Printf("GetBearerToken returned err: %v", err)
+		return
+	}
+
+	if err := cfg.DB.RevokeRefreshToken(r.Context(), refreshToken); err != nil {
+		respondWithError(w, http.StatusUnauthorized, "can't revoke refreshToken")
+		log.Printf("RevokeRefreshToken returned err: %v", err)
+		return
+	}
+
+	respondWithJSON(w, 204, "")
 }
 
 func (cfg *apiConfig) middlewareMetricsInc(next http.Handler) http.Handler {
