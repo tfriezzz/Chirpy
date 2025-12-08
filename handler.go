@@ -19,7 +19,6 @@ type User struct {
 	UpdatedAt time.Time `json:"updated_at"`
 	Email     string    `json:"email"`
 	Password  string    `json:"password"`
-	// ExpiresInSeconds float64   `json:"expires_in_seconds"`
 }
 
 type userResponse struct {
@@ -71,16 +70,7 @@ func (cfg *apiConfig) handlerLogin(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Print(err)
 	}
-	//
-	// token, err := auth.MakeJWT(user.ID, cfg.JWTString, time.Hour)
-	// if err != nil {
-	// 	log.Printf("MakeJWT returned err: %v", err)
-	// }
-	//
-	// refreshToken, err := auth.MakeRefreshToken()
-	// if err != nil {
-	// 	log.Printf("MakeRefreshTokern returned err: $%v", err)
-	// }
+
 	JWTtoken, refreshToken, err := RJWTokenMaker(cfg, user)
 	if err != nil {
 		log.Printf("RJWTokenMaker returned err: %v", err)
@@ -289,6 +279,56 @@ func (cfg *apiConfig) handlerRevoke(w http.ResponseWriter, r *http.Request) {
 	}
 
 	respondWithJSON(w, 204, "")
+}
+
+func (cfg *apiConfig) handlerUpdateCredentials(w http.ResponseWriter, r *http.Request) {
+	JWTtoken, err := auth.GetBearerToken(r.Header)
+	if err != nil || JWTtoken == "" {
+		respondWithError(w, 401, "authentication failed")
+		return
+	}
+
+	decoder := json.NewDecoder(r.Body)
+	params := User{}
+	if err := decoder.Decode(&params); err != nil {
+		log.Printf("Decode returned err: %v", err)
+		return
+	}
+
+	hashedPassword, err := auth.HashPassword(params.Password)
+	if err != nil {
+		log.Printf("HashPassword returned err: %v", err)
+		return
+	}
+
+	validatedUser, err := auth.ValidateJWT(JWTtoken, cfg.JWTString)
+	if err != nil {
+		respondWithError(w, 401, "authentication failed")
+		return
+	}
+
+	userParams := database.UpdateUserCredentialsParams{
+		ID:             validatedUser,
+		Email:          params.Email,
+		HashedPassword: hashedPassword,
+	}
+	dbUser, err := cfg.DB.UpdateUserCredentials(r.Context(), userParams)
+	if err != nil {
+		log.Printf("UpdateUserCredentials returned err: %v", err)
+		return
+	}
+
+	// dbUser, err := cfg.DB.GetUserByEmail(r.Context(), params.Email)
+	// fmt.Printf("USERbyEMAIL: %v, Email: %v", dbUser, params.Email)
+	// if err != nil {
+	// 	log.Printf("GetUserByEmail returnerd err %v", err)
+	// 	return
+	// }
+	userResponse := userResponse{
+		ID:    dbUser.ID,
+		Email: dbUser.Email,
+	}
+	respondWithJSON(w, 200, userResponse)
 }
 
 func (cfg *apiConfig) middlewareMetricsInc(next http.Handler) http.Handler {
