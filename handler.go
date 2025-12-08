@@ -105,12 +105,27 @@ func (cfg *apiConfig) handlerLogin(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// func (cfg *apiConfig) handlerRefresh(w http.ResponseWriter, r *http.Request) {
-// 	refreshToken, err := auth.GetBearerToken(r.Header)
-// 	if err != nil {
-// 		log.Printf("GetBearerToken returned err: %v", err)
-// 	}
-// }
+func (cfg *apiConfig) handlerRefresh(w http.ResponseWriter, r *http.Request) {
+	refreshToken, err := auth.GetBearerToken(r.Header)
+	if err != nil {
+		respondWithError(w, http.StatusUnauthorized, "authentication failed")
+		log.Printf("GetBearerToken returned err: %v", err)
+		return
+	}
+
+	dbUser, err := cfg.DB.GetUserFromRefreshToken(r.Context(), refreshToken)
+	if err != nil {
+		respondWithError(w, http.StatusUnauthorized, "authentication failed")
+		log.Printf("GetUserFromRefreshToken returned err: %v", err)
+	}
+
+	token, err := auth.MakeJWT(dbUser.ID, cfg.JWTString, time.Hour)
+	if err != nil {
+		respondWithError(w, http.StatusUnauthorized, "authentication failed")
+		log.Printf("MakeJWT returned err: %v", err)
+	}
+	respondWithJSON(w, 200, map[string]string{"token": token})
+}
 
 func (cfg *apiConfig) handlerChirps(w http.ResponseWriter, r *http.Request) {
 	decoder := json.NewDecoder(r.Body)
@@ -122,7 +137,7 @@ func (cfg *apiConfig) handlerChirps(w http.ResponseWriter, r *http.Request) {
 
 	tokenString, err := auth.GetBearerToken(r.Header)
 	if err != nil {
-		respondWithError(w, http.StatusUnauthorized, "suthentication failed")
+		respondWithError(w, http.StatusUnauthorized, "authentication failed")
 		return
 	}
 	userID, err := auth.ValidateJWT(tokenString, cfg.JWTString)
@@ -236,24 +251,6 @@ func (cfg *apiConfig) handlerAddUser(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func respondWithJSON(w http.ResponseWriter, code int, payload interface{}) error {
-	response, err := json.Marshal(payload)
-	if err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.WriteHeader(code)
-	if _, err := w.Write(response); err != nil {
-		return err
-	}
-	return nil
-}
-
-func respondWithError(w http.ResponseWriter, code int, msg string) error {
-	return respondWithJSON(w, code, map[string]string{"error": msg})
-}
-
 func (cfg *apiConfig) handlerMetrics(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	hits := cfg.fileserverHits.Load()
@@ -277,11 +274,32 @@ func (cfg *apiConfig) handlerReset(w http.ResponseWriter, r *http.Request) {
 	cfg.fileserverHits.Store(0)
 }
 
+func (cfg *apiConfig) handlerRevoke(w http.ResponseWriter, r *http.Request) {
+}
+
 func (cfg *apiConfig) middlewareMetricsInc(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		cfg.fileserverHits.Add(1)
 		next.ServeHTTP(w, r)
 	})
+}
+
+func respondWithJSON(w http.ResponseWriter, code int, payload interface{}) error {
+	response, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.WriteHeader(code)
+	if _, err := w.Write(response); err != nil {
+		return err
+	}
+	return nil
+}
+
+func respondWithError(w http.ResponseWriter, code int, msg string) error {
+	return respondWithJSON(w, code, map[string]string{"error": msg})
 }
 
 func profanityChecker(str string) (string, bool) {
