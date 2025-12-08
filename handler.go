@@ -117,7 +117,7 @@ func (cfg *apiConfig) handlerRefresh(w http.ResponseWriter, r *http.Request) {
 	respondWithJSON(w, 200, map[string]string{"token": token})
 }
 
-func (cfg *apiConfig) handlerChirps(w http.ResponseWriter, r *http.Request) {
+func (cfg *apiConfig) handlerPostChirp(w http.ResponseWriter, r *http.Request) {
 	decoder := json.NewDecoder(r.Body)
 	chirp := Chirp{}
 	err := decoder.Decode(&chirp)
@@ -135,13 +135,6 @@ func (cfg *apiConfig) handlerChirps(w http.ResponseWriter, r *http.Request) {
 		respondWithError(w, 401, "authentication failed")
 		return
 	}
-
-	// if err != nil {
-	// 	err := respondWithError(w, 500, "Something went wrong")
-	// 	if err != nil {
-	// 		log.Printf("respondWithError returned error: %v", err)
-	// 	}
-	// }
 
 	if len(chirp.Body) > 140 {
 		respondWithError(w, 400, "Chirp is too long")
@@ -189,6 +182,47 @@ func (cfg *apiConfig) handlerGetChirp(w http.ResponseWriter, r *http.Request) {
 	}
 	// fmt.Printf("test: %v\n", chirp)
 	respondWithJSON(w, 200, Chirp(chirp))
+}
+
+func (cfg *apiConfig) handlerDeleteChirp(w http.ResponseWriter, r *http.Request) {
+	JWTtoken, err := auth.GetBearerToken(r.Header)
+	if err != nil {
+		respondWithError(w, 401, "authentication failed")
+		return
+	}
+
+	validatedUser, err := auth.ValidateJWT(JWTtoken, cfg.JWTString)
+	if err != nil {
+		respondWithError(w, 403, "forbidden")
+		return
+	}
+
+	strID := r.PathValue("chirpID")
+	chirpID, err := uuid.Parse(strID)
+	if err != nil {
+		log.Printf("uuis.Parse returned err: %v", err)
+	}
+
+	chirp, err := cfg.DB.GetChirpsByID(r.Context(), chirpID)
+	if err != nil {
+		respondWithError(w, 404, "chirp dosn't exist")
+	}
+
+	if chirp.UserID != validatedUser {
+		respondWithError(w, 403, "forbidden")
+		return
+	}
+	chirpParams := database.DeleteChirpParams{
+		UserID: validatedUser,
+		ID:     chirpID,
+	}
+	if err := cfg.DB.DeleteChirp(r.Context(), chirpParams); err != nil {
+		log.Printf("DeleteChirp returned err: %v", err)
+		// respondWithError(w, 404, "chirp not found")
+		// return
+	}
+
+	respondWithJSON(w, 204, "")
 }
 
 func (cfg *apiConfig) handlerGetAllChirps(w http.ResponseWriter, r *http.Request) {
@@ -318,12 +352,6 @@ func (cfg *apiConfig) handlerUpdateCredentials(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	// dbUser, err := cfg.DB.GetUserByEmail(r.Context(), params.Email)
-	// fmt.Printf("USERbyEMAIL: %v, Email: %v", dbUser, params.Email)
-	// if err != nil {
-	// 	log.Printf("GetUserByEmail returnerd err %v", err)
-	// 	return
-	// }
 	userResponse := userResponse{
 		ID:    dbUser.ID,
 		Email: dbUser.Email,

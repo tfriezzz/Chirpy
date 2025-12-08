@@ -38,9 +38,10 @@ func main() {
 	apiCfg.JWTString = JWTString
 	mux.Handle("/app/", apiCfg.middlewareMetricsInc(http.StripPrefix("/app/", http.FileServer(http.Dir(".")))))
 	mux.Handle("GET /api/healthz", http.StripPrefix("/api/", http.HandlerFunc(handlerReadiness)))
-	mux.Handle("POST /api/chirps", http.StripPrefix("/api/", http.HandlerFunc(apiCfg.handlerChirps)))
+	mux.Handle("POST /api/chirps", http.StripPrefix("/api/", http.HandlerFunc(apiCfg.handlerPostChirp)))
 	mux.Handle("GET /api/chirps", http.StripPrefix("/api/", http.HandlerFunc(apiCfg.handlerGetAllChirps)))
 	mux.Handle("GET /api/chirps/{chirpID}", http.StripPrefix("/api/", http.HandlerFunc(apiCfg.handlerGetChirp)))
+	mux.Handle("DELETE /api/chirps/{chirpID}", http.StripPrefix("/api/", http.HandlerFunc(apiCfg.handlerDeleteChirp)))
 	mux.Handle("POST /api/users", http.StripPrefix("/api/", http.HandlerFunc(apiCfg.handlerAddUser)))
 	mux.Handle("PUT /api/users", http.StripPrefix("/api/", http.HandlerFunc(apiCfg.handlerUpdateCredentials)))
 	mux.Handle("POST /api/login", http.StripPrefix("/api/", http.HandlerFunc(apiCfg.handlerLogin)))
