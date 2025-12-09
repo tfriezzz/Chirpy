@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 
@@ -249,6 +250,17 @@ func (cfg *apiConfig) handlerGetAllChirps(w http.ResponseWriter, r *http.Request
 		chirp := Chirp(c)
 		chirpsSlice = append(chirpsSlice, chirp)
 	}
+
+	sortQuery := r.URL.Query().Get("sort")
+	if sortQuery != "" {
+		sort.Slice(chirpsSlice, func(i, j int) bool {
+			if sortQuery == "desc" {
+				return chirpsSlice[i].CreatedAt.After(chirpsSlice[j].CreatedAt)
+			}
+			return chirpsSlice[i].CreatedAt.Before(chirpsSlice[j].CreatedAt)
+		})
+	}
+
 	if err := respondWithJSON(w, 200, chirpsSlice); err != nil {
 		log.Print(err)
 	}
