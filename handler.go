@@ -368,6 +368,13 @@ func (cfg *apiConfig) handlerUpgradeToRed(w http.ResponseWriter, r *http.Request
 			UserID string `json:"user_id"`
 		} `json:"data"`
 	}
+
+	apiKey, err := auth.GetAPIKey(r.Header)
+	if apiKey != cfg.PolkaKey {
+		respondWithError(w, 401, "Unauthorized")
+		return
+	}
+
 	decoder := json.NewDecoder(r.Body)
 	webhook := polkaWebhook{}
 
@@ -385,11 +392,6 @@ func (cfg *apiConfig) handlerUpgradeToRed(w http.ResponseWriter, r *http.Request
 		respondWithJSON(w, 204, "")
 		return
 	}
-
-	// if dbUser, err := cfg.DB.GetUserByID(r.Context(), userID); err == sql.ErrNoRows {
-	// 	respondWithError(w, 404, "user not found")
-	// 	return
-	// }
 
 	if webhook.Event == "user.upgraded" {
 		_, err := cfg.DB.UpgradeUserToRed(r.Context(), userID)
@@ -476,13 +478,6 @@ func refreshTokenToDatabase(cfg *apiConfig, r *http.Request, refreshToken string
 }
 
 func dbUserToUserResponse(u database.User, cfg *apiConfig, JWTtoken string, refreshToken string) userResponse {
-	// var expiration time.Duration
-	// if seconds != 0 && seconds >= 3600 {
-	// 	expiration = time.Duration(seconds) * time.Second
-	// } else {
-	// expiration = time.Hour
-	// }
-
 	return userResponse{
 		ID:           u.ID,
 		CreatedAt:    u.CreatedAt,

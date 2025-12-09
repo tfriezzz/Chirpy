@@ -16,12 +16,14 @@ type apiConfig struct {
 	fileserverHits atomic.Int32
 	DB             *database.Queries
 	JWTString      string
+	PolkaKey       string
 }
 
 func main() {
 	godotenv.Load()
 	dbURL := os.Getenv("DB_URL")
 	JWTString := os.Getenv("JWTSTRING")
+	polkaKey := os.Getenv("POLKA_KEY")
 	db, err := sql.Open("postgres", dbURL)
 	if err != nil {
 		fmt.Print(err)
@@ -36,6 +38,7 @@ func main() {
 	var apiCfg apiConfig
 	apiCfg.DB = dbQueries
 	apiCfg.JWTString = JWTString
+	apiCfg.PolkaKey = polkaKey
 	mux.Handle("/app/", apiCfg.middlewareMetricsInc(http.StripPrefix("/app/", http.FileServer(http.Dir(".")))))
 	mux.Handle("GET /api/healthz", http.StripPrefix("/api/", http.HandlerFunc(handlerReadiness)))
 	mux.Handle("POST /api/chirps", http.StripPrefix("/api/", http.HandlerFunc(apiCfg.handlerPostChirp)))

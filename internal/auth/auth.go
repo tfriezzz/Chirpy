@@ -98,3 +98,13 @@ func MakeRefreshToken() (string, error) {
 
 	return hexString, nil
 }
+
+func GetAPIKey(headers http.Header) (string, error) {
+	header := headers["Authorization"]
+	for _, string := range header {
+		splitString := strings.Split(string, " ")
+		apiString := strings.TrimSpace(splitString[1])
+		return apiString, nil
+	}
+	return "", fmt.Errorf("missing string")
+}
