@@ -18,6 +18,15 @@ SELECT * FROM chirps
 ORDER BY created_at;
 
 
+-- name: GetAllChirpsFromUserID :many
+SELECT chirps.id, chirps.created_at, chirps.updated_at, chirps.body, chirps.user_id
+FROM chirps
+INNER JOIN users
+ON chirps.user_id = users.id
+WHERE users.id = $1
+ORDER BY chirps.created_at;
+
+
 -- name: DeleteChirp :exec
 DELETE FROM chirps
 WHERE user_id = $1 AND id = $2;

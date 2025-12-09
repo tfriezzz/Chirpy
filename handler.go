@@ -228,7 +228,18 @@ func (cfg *apiConfig) handlerDeleteChirp(w http.ResponseWriter, r *http.Request)
 }
 
 func (cfg *apiConfig) handlerGetAllChirps(w http.ResponseWriter, r *http.Request) {
-	chirps, err := cfg.DB.GetAllChirps(r.Context())
+	s := r.URL.Query().Get("author_id")
+	var chirps []database.Chirp
+	var err error
+	if s != "" {
+		userID, err := uuid.Parse(s)
+		if err != nil {
+			log.Printf("uuid.Parse returned err: %v", err)
+		}
+		chirps, err = cfg.DB.GetAllChirpsFromUserID(r.Context(), userID)
+	} else {
+		chirps, err = cfg.DB.GetAllChirps(r.Context())
+	}
 	var chirpsSlice []Chirp
 	// var chirpsArray [chirpLen]Chirp
 	if err != nil {
